@@ -43,13 +43,13 @@ canvas{display:block;width:100%;height:100%}
 @media(min-width:760px){.controls{display:none}}
 @media(max-width:620px){.app{padding:8px;gap:8px}.topbar{padding:8px 10px}.brand small{display:none}.game{border-radius:20px}.chip{font-size:.68rem;padding:0 7px}.control{width:62px;height:54px}.jump{width:76px;height:62px}}
 </style>
-<link rel="stylesheet" href="/palette.css"><style>:root{--pink:#C18DB4;--pink2:#87A7D0}body{background:#0E1F2F}.topbar,.chip,.control,.jump{background:#0E1B48;color:#E2CAD8;border-color:#87A7D033}.panel{background:#E2CAD8;color:#0E1B48}.panel h1,.panel h2,.panel p,.person small{color:#0E1B48}.btn.primary{background:#C18DB4;color:#0E1B48}.btn.secondary{background:#87A7D0;color:#0E1B48;border-color:#27425D33}.overlay{background:#0E1F2Fbb}</style></head>
+<link rel="stylesheet" href="/palette.css"><style>:root{--pink:#C18DB4;--pink2:#87A7D0}body{background:#0E1F2F}.topbar,.chip,.control,.jump{background:#0E1B48;color:#E2CAD8;border-color:#87A7D033}.panel{background:#E2CAD8;color:#0E1B48}.panel h1,.panel h2,.panel p,.person small{color:#0E1B48}.btn.primary{background:#C18DB4;color:#0E1B48}.btn.secondary{background:#87A7D0;color:#0E1B48;border-color:#27425D33}.overlay{background:#0E1F2Fbb}</style><style>.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}.controls{touch-action:none}.overlay{overflow:auto}.topbar a{color:inherit}.panel{margin:auto}@media(max-width:620px){.topbar{flex-wrap:wrap}.brand small{display:block}.hud{gap:4px}.chip{min-height:26px}.panel{padding:16px}.panel p{font-size:12px;margin:10px 0}.people{margin:12px 0}.person img{height:66px;width:50px}.panel h1{font-size:12px}.actions{margin-top:12px}.game{min-height:180px}}</style></head>
 <body>
 <div class="app">
 <header class="topbar">
   <div class="brand">
     <strong>EM BUSCA DA FOFINHA</strong>
-    <small>Parque do pôr do sol</small>
+    <small>Parque do pôr do sol · <a href="/#story" target="_top">Voltar ao app</a></small>
   </div>
   <div class="hud">
     <span class="chip">❤️ <b id="lives">3</b></span>
@@ -65,7 +65,7 @@ canvas{display:block;width:100%;height:100%}
 <div class="overlay" id="start">
   <section class="panel">
     <h1>EM BUSCA DA FOFINHA ❤️</h1>
-    <p>Corra pelo parque, desvie dos obstáculos, colete rosas e cartas e encontre a Fofinha.</p>
+    <p>Corra pelo parque, pule nas plataformas com grama, colete rosas e cartas e encontre a Fofinha.</p>
     <div class="people">
       <div class="person"><img src="assets/player.png" alt="Personagem masculino moreno, cacheado e de óculos"><small>Você</small></div>
       <div class="person"><img src="assets/fofinha.png" alt="Personagem feminina branca e ruiva"><small>Fofinha</small></div>
@@ -73,7 +73,7 @@ canvas{display:block;width:100%;height:100%}
     <p>No celular use os controles na tela. No computador, setas ou A/D e Espaço.</p>
     <div class="actions">
       <button class="btn primary" id="startBtn">Começar aventura</button>
-      <button class="btn secondary" onclick="location.href='../index.html'">Voltar ao site</button>
+      <a class="btn secondary" href="/#story" target="_top">Voltar ao app</a>
     </div>
   </section>
 </div>
@@ -88,7 +88,7 @@ canvas{display:block;width:100%;height:100%}
     </div>
     <div class="actions">
       <button class="btn primary" id="restartBtn">Jogar novamente</button>
-      <button class="btn secondary" onclick="location.href='../index.html'">Voltar ao site</button>
+      <a class="btn secondary" href="/#story" target="_top">Voltar ao app</a>
     </div>
   </section>
 </div>
@@ -105,7 +105,8 @@ canvas{display:block;width:100%;height:100%}
 </section>
 </div>
 
-<script>
+<script type="module">
+import {stepPlayer} from "./physics.js";
 const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
 const bg=new Image(),playerImg=new Image(),girlImg=new Image(),roseImg=new Image(),letterImg=new Image();
 bg.src="assets/background.png";playerImg.src="assets/player.png";girlImg.src="assets/fofinha.png";roseImg.src="assets/rose.png";letterImg.src="assets/letter.png";
@@ -113,13 +114,13 @@ bg.src="assets/background.png";playerImg.src="assets/player.png";girlImg.src="as
 const UI={lives:document.getElementById("lives"),roses:document.getElementById("roses"),letters:document.getElementById("letters"),timer:document.getElementById("timer"),toast:document.getElementById("toast"),start:document.getElementById("start"),finish:document.getElementById("finish")};
 const keys={left:false,right:false,jump:false};
 const world={w:3600,ground:0,camera:0};
-const player={x:110,y:0,w:40,h:56,vx:0,vy:0,speed:4.2,jump:11.8,grounded:false,facing:1,lives:3,roses:0,letters:0,inv:0,frame:0};
+const player={x:110,y:0,w:40,h:56,vx:0,vy:0,speed:4.2,coyote:0,jumpBuffer:0,grounded:false,facing:1,lives:3,roses:0,letters:0,inv:0,frame:0};
 let running=false,finished=false,startTime=0,timeLeft=95,checkpoint=110;
 
 const platforms=[
 {x:0,w:620,y:0},{x:720,w:480,y:0},{x:1300,w:510,y:0},{x:1900,w:460,y:0},{x:2450,w:520,y:0},{x:3060,w:540,y:0},
 {x:380,w:140,y:150},{x:850,w:120,y:125},{x:1120,w:110,y:220},{x:1450,w:135,y:165},{x:1710,w:100,y:245},
-{x:2150,w:135,y:175},{x:2630,w:115,y:260},{x:2890,w:140,y:185},{x:3260,w:120,y:250}
+{x:2500,w:110,y:100},{x:3130,w:100,y:100},{x:2150,w:135,y:175},{x:2630,w:115,y:260},{x:2890,w:140,y:185},{x:3260,w:120,y:250}
 ];
 const spikes=[{x:620,w:100},{x:1200,w:100},{x:1810,w:90},{x:2360,w:90},{x:2970,w:90}];
 const checkpoints=[{x:1300,on:false},{x:2450,on:false}];
@@ -137,11 +138,15 @@ const letters=[
 ];
 const girl={x:3470,w:40,h:58};
 
-function resize(){const r=canvas.parentElement.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=r.width*d;canvas.height=r.height*d;canvas.style.width=r.width+"px";canvas.style.height=r.height+"px";ctx.setTransform(d,0,0,d,0,0);world.ground=r.height-72;if(!running)player.y=world.ground-player.h}
+const view={w:960,h:540,scale:1,offsetY:0};
+function resize(){const r=canvas.parentElement.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=r.width*d;canvas.height=r.height*d;canvas.style.width=r.width+"px";canvas.style.height=r.height+"px";view.w=Math.max(480,r.width/r.height*view.h);view.scale=Math.min(r.width/view.w,r.height/view.h);view.offsetY=(r.height-view.h*view.scale)/2;ctx.setTransform(d,0,0,d,0,0);world.ground=468;if(!running)player.y=world.ground-player.h}
+new ResizeObserver(resize).observe(canvas.parentElement);
 addEventListener("resize",resize);resize();
 
 function reset(){
-Object.assign(player,{x:110,y:world.ground-player.h,vx:0,vy:0,lives:3,roses:0,letters:0,inv:0});
+Object.assign(player,{x:110,y:world.ground-player.h,vx:0,vy:0,lives:3,roses:0,letters:0,inv:0,grounded:true,coyote:0,jumpBuffer:0});
+clearKeys();
+enemies.forEach((e,i)=>Object.assign(e,{x:[790,1380,1990,2530][i],dir:[1,-1,1,-1][i]}));
 world.camera=0;checkpoint=110;startTime=performance.now();timeLeft=95;finished=false;
 roses.forEach(o=>o.got=false);letters.forEach(o=>o.got=false);checkpoints.forEach(o=>o.on=false);
 UI.lives.textContent=3;UI.roses.textContent=0;UI.letters.textContent=0;UI.timer.textContent=95;
@@ -153,20 +158,9 @@ function py(p){return world.ground-p.y}
 function hit(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y}
 
 function update(){
-if(keys.left){player.vx-=.75;player.facing=-1}
-if(keys.right){player.vx+=.75;player.facing=1}
-player.vx=Math.max(-player.speed,Math.min(player.speed,player.vx));
-if(!keys.left&&!keys.right)player.vx*=.82;
-if(keys.jump&&player.grounded){player.vy=-player.jump;player.grounded=false}
-keys.jump=false;player.vy+=.62;
-const prev=player.y;player.x+=player.vx;player.y+=player.vy;player.grounded=false;
-
-for(const p of platforms){
- const box={x:p.x,y:py(p),w:p.w,h:80};
- if(hit(player,box)&&player.vy>=0&&prev+player.h<=box.y+8){player.y=box.y-player.h;player.vy=0;player.grounded=true}
-}
+stepPlayer(player,keys,platforms,world.ground);
 player.x=Math.max(0,Math.min(world.w-player.w,player.x));
-if(player.y>canvas.clientHeight+100)lose();
+if(player.y>view.h+100)lose();
 
 for(const e of enemies){e.x+=e.s*e.dir;if(e.x<=e.min||e.x>=e.max)e.dir*=-1}
 if(performance.now()>player.inv){
@@ -182,7 +176,7 @@ timeLeft=Math.max(0,95-Math.floor((performance.now()-startTime)/1000));UI.timer.
 if(timeLeft===0){lose();startTime=performance.now()}
 
 if(player.x+player.w>=girl.x){running=false;finished=true;document.getElementById("finishText").textContent=(player.roses===8&&player.letters===3)?"Você coletou tudo e encontrou a Fofinha. Amor completo! 💖":"Você venceu a fase e encontrou a Fofinha. ❤️";UI.finish.classList.remove("hidden")}
-const target=player.x-canvas.clientWidth*.38;world.camera+=(target-world.camera)*.08;world.camera=Math.max(0,Math.min(world.w-canvas.clientWidth,world.camera));
+const target=player.x-view.w*.38;world.camera+=(target-world.camera)*.08;world.camera=Math.max(0,Math.min(world.w-view.w,world.camera));
 player.frame=Math.floor(performance.now()/120)%4;
 }
 
@@ -191,18 +185,19 @@ if(performance.now()<player.inv)return;
 player.lives--;UI.lives.textContent=player.lives;player.inv=performance.now()+1400;
 if(player.lives<=0){player.lives=3;UI.lives.textContent=3;checkpoint=110;checkpoints.forEach(c=>c.on=false);toast("💔 Recomeçando por amor!",1800)}
 else toast("💔 Você perdeu um coração!");
-player.x=checkpoint;player.y=world.ground-player.h-70;player.vx=0;player.vy=-4;
+player.x=checkpoint;player.y=world.ground-player.h-70;player.vx=0;player.vy=-4;player.grounded=false;player.coyote=0;player.jumpBuffer=0;
 }
 
 function toast(t,d=1500){UI.toast.textContent=t;UI.toast.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>UI.toast.classList.remove("show"),d)}
 
 function draw(){
 ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
-ctx.drawImage(bg,0,0,canvas.clientWidth,canvas.clientHeight);
+ctx.save();ctx.translate(0,view.offsetY);ctx.scale(view.scale,view.scale);
+if(bg.complete&&bg.naturalWidth)ctx.drawImage(bg,0,0,view.w,view.h);
 ctx.save();ctx.translate(-world.camera,0);
 
 for(const p of platforms){
- const y=py(p);ctx.fillStyle="#81543f";ctx.fillRect(p.x,y,p.w,80);ctx.fillStyle="#4d9158";ctx.fillRect(p.x,y,p.w,14);
+ const y=py(p);ctx.fillStyle="#81543f";ctx.fillRect(p.x,y,p.w,80);ctx.fillStyle="#4d9158";ctx.fillRect(p.x,y,p.w,14);ctx.fillStyle="#b9e899";ctx.fillRect(p.x,y,p.w,3);
 }
 for(const c of checkpoints){const y=world.ground-65;ctx.fillStyle="#5f3e2f";ctx.fillRect(c.x,y,5,65);ctx.fillStyle=c.on?"#5dd07f":"#f7c75d";ctx.beginPath();ctx.moveTo(c.x+5,y+4);ctx.lineTo(c.x+38,y+16);ctx.lineTo(c.x+5,y+28);ctx.fill()}
 for(const s of spikes){for(let x=s.x;x<s.x+s.w;x+=18){ctx.fillStyle="#5d5360";ctx.beginPath();ctx.moveTo(x,world.ground);ctx.lineTo(x+9,world.ground-22);ctx.lineTo(x+18,world.ground);ctx.fill()}}
@@ -217,16 +212,26 @@ const gf=Math.floor(performance.now()/420)%2;
 ctx.drawImage(girlImg,gf*48,0,48,64,girl.x,world.ground-girl.h-6,48,64);
 ctx.fillStyle="rgba(255,255,255,.9)";ctx.fillRect(girl.x-28,world.ground-girl.h-39,110,25);ctx.fillStyle="#4b1c38";ctx.font="bold 12px DM Sans";ctx.fillText("Fofinha ❤️",girl.x-16,world.ground-girl.h-21);
 
-ctx.restore();
+ctx.restore();ctx.restore();
 }
 
-function loop(){if(running&&!finished)update();draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+let lastFrame=0,accumulator=0,inView=true,pausedAt=0;
+new IntersectionObserver(([entry])=>{inView=entry.isIntersecting;if(!inView){clearKeys();pausedAt=performance.now()}else if(pausedAt){if(running)startTime+=performance.now()-pausedAt;pausedAt=0;lastFrame=0}}).observe(canvas);
+function loop(now){
+ const elapsed=lastFrame?Math.min(now-lastFrame,100):0;lastFrame=now;
+ if(running&&!finished&&!document.hidden&&inView){accumulator+=elapsed;while(accumulator>=1000/60){update();accumulator-=1000/60;if(!running)break}}else accumulator=0;
+ draw();requestAnimationFrame(loop)
+}requestAnimationFrame(loop);
 
-function hold(el,key){el.onpointerdown=e=>{e.preventDefault();keys[key]=true};["onpointerup","onpointercancel","onpointerleave"].forEach(n=>el[n]=e=>{e.preventDefault();keys[key]=false})}
+function clearKeys(){keys.left=false;keys.right=false;keys.jump=false}
+function hold(el,key){el.onpointerdown=e=>{e.preventDefault();el.setPointerCapture(e.pointerId);keys[key]=true};["onpointerup","onpointercancel","onlostpointercapture"].forEach(n=>el[n]=()=>keys[key]=false)}
 hold(document.getElementById("left"),"left");hold(document.getElementById("right"),"right");
 document.getElementById("jump").onpointerdown=e=>{e.preventDefault();keys.jump=true};
-addEventListener("keydown",e=>{if(["ArrowLeft","a","A"].includes(e.key))keys.left=true;if(["ArrowRight","d","D"].includes(e.key))keys.right=true;if(["ArrowUp","w","W"," "].includes(e.key)){e.preventDefault();keys.jump=true}});
+addEventListener("keydown",e=>{if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault();if(["ArrowLeft","a","A"].includes(e.key))keys.left=true;if(["ArrowRight","d","D"].includes(e.key))keys.right=true;if(!e.repeat&&["ArrowUp","w","W"," "].includes(e.key))keys.jump=true});
 addEventListener("keyup",e=>{if(["ArrowLeft","a","A"].includes(e.key))keys.left=false;if(["ArrowRight","d","D"].includes(e.key))keys.right=false});
+addEventListener("blur",clearKeys);
+let hiddenAt=0;
+addEventListener("visibilitychange",()=>{clearKeys();if(document.hidden)hiddenAt=performance.now();else{if(hiddenAt&&running&&inView)startTime+=performance.now()-hiddenAt;hiddenAt=0;lastFrame=0}});
 </script>
 </body>
 </html>

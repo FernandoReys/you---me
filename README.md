@@ -79,3 +79,5 @@ O link do jogo foi corrigido para `memorias/jogo/index.html` e a referência ine
 ### Aparência e experiência no celular
 
 A paleta do casal usa #0E1B48, #C18DB4, #E2CAD8, #87A7D0, #27425D e #0E1F2F. A galeria apresenta 34 momentos, agrupando seis variações semelhantes e preservando os 40 arquivos originais. As miniaturas exibem a foto inteira. Nossa História usa capítulos nativos em rolagem vertical, com carta, contador e surpresas, sem uma página incorporada dentro da tela.
+
+O jogo está em Nossa História → Nosso jogo, com opção de tela cheia. A física usa passos fixos de 60 Hz, colisão por cruzamento do topo das plataformas, salto de cerca de 209 pixels, tolerância curta na borda e memória do comando de pulo antes de aterrissar. As coordenadas da fase são estáveis ao redimensionar a tela.

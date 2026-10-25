@@ -3,7 +3,8 @@ const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>
 let loaded=false,loading=null,timer;
 function selectTab(key){
  $$('[data-story-tab]').forEach(button=>{const active=button.dataset.storyTab===key;button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1});
- for(const tab of ['timeline','letter','time','surprises'])$('#story-'+tab).hidden=key!==tab;
+ for(const tab of ['timeline','letter','time','surprises','game'])$('#story-'+tab).hidden=key!==tab;
+ if(key==='game'){const frame=$('#couple-game');if(!frame.getAttribute('src'))frame.src=frame.dataset.src}
  $('.story-native-tabs').scrollIntoView({behavior:'smooth',block:'start'});
 }
 export async function loadStory(){
