@@ -8,9 +8,10 @@ Chat privado de casal com contas individuais, conexão por convite, fotos, filme
 - Implementado: áudio e vídeo com atender, encerrar, silenciar microfone, ligar/desligar câmera e reprodução inline no iPhone.
 - Implementado: sinalização persistente por HTTP, compatível com funções do Vercel. Atualizações e presença são consultadas a cada 2 segundos, sem servidor Socket.IO.
 - Preparado: publicação no Vercel e armazenamento persistente em PostgreSQL.
-- Pendente: configurar PostgreSQL no ambiente do Vercel, aplicar a migração e configurar um servidor TURN real. Sem TURN, chamadas usam conexão direta e podem falhar em redes móveis ou restritas.
+- PostgreSQL provisionado no Neon, tabelas iniciais criadas e DATABASE_URL configurada nos projetos Vercel `you-me` e `youme`. O banco é exclusivo deste app.
+- Pendente: configurar um servidor TURN real. Sem TURN, chamadas usam conexão direta e podem falhar em redes móveis ou restritas.
 - Pendente: teste de captura de câmera/microfone e transporte de áudio/vídeo entre dois aparelhos e redes reais. Testes de API não comprovam esse transporte.
-- O deploy pelo conector foi recusado com HTTP 403 por falta de permissão para criar o projeto na equipe fernando-8621. Não há URL nova do Vercel validada.
+- Os projetos `you-me` e `youme` existentes foram localizados e usam a mesma base. Não é necessário criar outro projeto.
 
 ## Desenvolvimento local
 
@@ -65,6 +66,12 @@ Senhas usam scrypt; tokens de sessão são armazenados como hash SHA-256 e envia
 
 ## Validação
 
-`npm test` cobre contas, login, sessões independentes, presença em vários aparelhos, isolamento, convite, mensagens, fotos privadas, filmes/metas, sinalização de vídeo, credenciais TURN temporárias e persistência após reinício local. `npm run build` verifica sintaxe e manifest. Não foram validados PostgreSQL de produção, publicação no Vercel, notificações no sistema operacional ou chamadas em aparelhos reais.
+`npm test` cobre contas, login, sessões independentes, presença em vários aparelhos, isolamento, convite, mensagens, fotos privadas, filmes/metas, sinalização de vídeo, credenciais TURN temporárias e persistência após reinício local. `npm run build` verifica sintaxe e manifest. Notificações no sistema operacional e chamadas em aparelhos reais continuam sem validação. O esquema PostgreSQL foi aplicado e conferido via conexão Neon; valide `/api/health` após cada publicação.
 
 Fontes DM Sans e Lora são servidas localmente; licenças em `public/fonts/`.
+
+## Integração com o site da Fofinha
+
+Os arquivos de `FernandoReys/site-para-minha-fofinha` foram incorporados em `public/memorias`, preservando as 40 fotos originais, a carta/surpresa, Nossa História, Nosso Tempo e o jogo com seus sprites. O app oferece a aba Nossa História, um álbum original separado das novas fotos do banco e imagens na entrada. Não são links remotos para imagens: os arquivos fazem parte do You & Me. A cópia não sincroniza edições futuras automaticamente.
+
+O link do jogo foi corrigido para `memorias/jogo/index.html` e a referência inexistente `foto39.jpeg` usa o arquivo original `39.jpeg`. A data de início do contador foi preservada do original (04/04/2026). O arquivo `LICENSE-original.txt` mantém a licença de origem. As fotos e páginas copiadas continuam sendo arquivos estáticos públicos, como já eram no repositório original; as novas fotos enviadas pelo app seguem privadas por casal no banco.

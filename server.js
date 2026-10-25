@@ -79,4 +79,4 @@ export function createApp(options={}){
  app.use((err,req,res,next)=>{console.error('Request failed:',err.code||err.name);res.status(err instanceof multer.MulterError?400:500).json({error:err instanceof multer.MulterError?'A foto deve ter até 3 MB.':'Não foi possível concluir. Tente novamente.'})});
  return{app,server,db};
 }
-if(process.argv[1]===fileURLToPath(import.meta.url)){const {server}=createApp();server.listen(process.env.PORT||3000,'0.0.0.0',()=>console.log('You & Me iniciado.'))}
+if(process.argv[1]===fileURLToPath(import.meta.url)){const {server}=createApp();const portFlag=process.argv.indexOf('--port');const port=portFlag>=0?Number(process.argv[portFlag+1]):Number(process.env.PORT||3000);if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Porta inválida.');server.listen(port,'0.0.0.0',()=>console.log('You & Me iniciado.'))}
