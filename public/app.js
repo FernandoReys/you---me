@@ -70,6 +70,7 @@ async function beginCall(video){if(!me?.pair)throw new Error('Conecte seu amor a
 $('#call-button').onclick=()=>action(()=>beginCall(false),$('#call-button'));
 $('#video-button').onclick=()=>action(()=>beginCall(true),$('#video-button'));
 async function handleSignal({from,data,at}){
+ if(window.YOUME_NATIVE_CALLS)return;
  try{
  if(data.type==='offer'){
   if(Date.now()-at>45000)return;if(callActive){await api('/signals',{method:'POST',body:{type:'busy',callId:data.callId}});return}
