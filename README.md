@@ -75,3 +75,7 @@ Fontes DM Sans e Lora são servidas localmente; licenças em `public/fonts/`.
 Os arquivos de `FernandoReys/site-para-minha-fofinha` foram incorporados em `public/memorias`, preservando as 40 fotos originais, a carta/surpresa, Nossa História, Nosso Tempo e o jogo com seus sprites. O app oferece a aba Nossa História, um álbum original separado das novas fotos do banco e imagens na entrada. Não são links remotos para imagens: os arquivos fazem parte do You & Me. A cópia não sincroniza edições futuras automaticamente.
 
 O link do jogo foi corrigido para `memorias/jogo/index.html` e a referência inexistente `foto39.jpeg` usa o arquivo original `39.jpeg`. A data de início do contador foi preservada do original (04/04/2026). O arquivo `LICENSE-original.txt` mantém a licença de origem. As fotos e páginas copiadas continuam sendo arquivos estáticos públicos, como já eram no repositório original; as novas fotos enviadas pelo app seguem privadas por casal no banco.
+
+### Aparência e experiência no celular
+
+A paleta do casal usa #0E1B48, #C18DB4, #E2CAD8, #87A7D0, #27425D e #0E1F2F. A galeria apresenta 34 momentos, agrupando seis variações semelhantes e preservando os 40 arquivos originais. As miniaturas exibem a foto inteira. Nossa História usa capítulos nativos em rolagem vertical, com carta, contador e surpresas, sem uma página incorporada dentro da tela.
