@@ -31,6 +31,25 @@ test('contas, sessões, pareamento, presença em vários aparelhos, chat, fotos,
   const photo=await request('/photos',{cookie:a.cookie,method:'POST',body:form});assert.equal(photo.status,200);
   const imageResponse=await fetch(base+'/api/photos/'+photo.data.body.file,{headers:{cookie:b.cookie}});assert.equal(imageResponse.status,200);assert.deepEqual(Buffer.from(await imageResponse.arrayBuffer()),image);
   assert.equal((await fetch(base+'/api/photos/'+photo.data.body.file,{headers:{cookie:other.cookie}})).status,400);
+  // Personalization is private, survives restarts, and never exposes wallpaper to a partner.
+  const prefs={theme:'obsidian',bubble:'ghost',wallpaperOpacity:40};
+  assert.equal((await request('/preferences',{method:'PUT',body:prefs})).status,401);
+  assert.equal((await request('/preferences',{cookie:a.cookie,method:'PUT',body:{...prefs,theme:'invalid'}})).status,400);
+  assert.equal((await request('/preferences',{cookie:a.cookie,method:'PUT',body:prefs})).status,200);
+  assert.deepEqual((await request('/me',{cookie:a.cookie})).data.preferences,prefs);
+  assert.equal((await request('/me',{cookie:b.cookie})).data.preferences.theme,'midnight');
+  const profileImage=()=>{const f=new FormData();f.set('photo',new Blob([image],{type:'image/png'}),'avatar.png');return f};
+  const avatar=await request('/profile-media/avatar',{cookie:a.cookie,method:'POST',body:profileImage()});assert.equal(avatar.status,200);assert.ok(avatar.data.avatar);
+  assert.equal((await fetch(base+avatar.data.avatar)).status,401);
+  assert.equal((await fetch(base+avatar.data.avatar,{headers:{cookie:b.cookie}})).status,200);
+  assert.equal((await fetch(base+avatar.data.avatar,{headers:{cookie:other.cookie}})).status,404);
+  assert.equal((await request('/me',{cookie:b.cookie})).data.partner.avatar,avatar.data.avatar);
+  const wallpaper=await request('/profile-media/wallpaper',{cookie:a.cookie,method:'POST',body:profileImage()});assert.equal(wallpaper.status,200);
+  assert.equal((await fetch(base+wallpaper.data.wallpaper,{headers:{cookie:a.cookie}})).status,200);
+  assert.equal((await fetch(base+wallpaper.data.wallpaper,{headers:{cookie:b.cookie}})).status,404);
+  const unsafe=new FormData();unsafe.set('photo',new Blob(['<svg></svg>'],{type:'image/svg+xml'}),'x.svg');
+  assert.equal((await request('/profile-media/avatar',{cookie:a.cookie,method:'POST',body:unsafe})).status,400);
+  assert.equal((await request('/profile',{cookie:a.cookie,method:'PATCH',body:{name:'Fernando Reis'}})).status,200);
   const bad=new FormData();bad.set('photo',new Blob(['bad'],{type:'image/png'}),'bad.png');assert.equal((await request('/photos',{cookie:a.cookie,method:'POST',body:bad})).status,400);
   assert.equal((await request('/signals',{cookie:other.cookie,method:'POST',body:{type:'offer',callId:'test-call-1234567890',sdp:{type:'offer',sdp:'test'}}})).status,400);
   assert.equal((await request('/signals',{cookie:a.cookie,method:'POST',body:{type:'offer',callId:'test-call-1234567890',video:true,sdp:{type:'offer',sdp:'test-video'}}})).status,200);
@@ -46,7 +65,7 @@ test('contas, sessões, pareamento, presença em vários aparelhos, chat, fotos,
   for(const route of ['/memorias/index.html','/memorias/nossa-historia.html','/memorias/nosso-tempo.html','/memorias/jogo/index.html','/memorias/jogo/assets/fofinha.png','/memorias/fotos/39.jpeg'])assert.equal((await fetch(base+route)).status,200,route);
   const story=await(await fetch(base+'/memorias/historia.json')).json();assert.equal(story.chapters.length,9);assert.equal(story.chapters.reduce((n,c)=>n+c.paragraphs.length,0),18);assert.equal(new Set(story.chapters.map(c=>c.photo)).size,9);
   const surprise=await(await fetch(base+'/memorias/index.html')).text();assert.ok(surprise.includes('jogo/index.html'));assert.ok(!surprise.includes('fotos/foto39.jpeg'));
-  await stop();instance=createApp({dataDir,databaseUrl:null});await start();assert.equal((await request('/items',{cookie:b.cookie})).data.length,4);assert.equal((await request('/items',{cookie:b.cookie})).data.find(i=>i.id===movie.data.id).body.done,true);
+  await stop();instance=createApp({dataDir,databaseUrl:null});await start();assert.deepEqual((await request('/me',{cookie:a.cookie})).data.preferences,{theme:'obsidian',bubble:'ghost',wallpaperOpacity:40});assert.ok((await request('/me',{cookie:a.cookie})).data.avatar);assert.equal((await request('/me',{cookie:a.cookie})).data.name,'Fernando Reis');assert.equal((await request('/profile-media/wallpaper',{cookie:a.cookie,method:'DELETE'})).status,200);assert.equal((await request('/me',{cookie:a.cookie})).data.wallpaper,null);assert.equal((await request('/items',{cookie:b.cookie})).data.length,4);assert.equal((await request('/items',{cookie:b.cookie})).data.find(i=>i.id===movie.data.id).body.done,true);
   assert.equal((await request('/logout',{cookie:a.cookie,method:'POST'})).status,200);assert.equal((await request('/me',{cookie:a.cookie})).status,401);assert.equal((await request('/me',{cookie:secondSession.cookie})).status,200);
  }finally{await stop();rmSync(dataDir,{recursive:true,force:true})}
 });

@@ -6,6 +6,7 @@ import path from 'node:path';
 import multer from 'multer';
 import {fileURLToPath} from 'node:url';
 import {openStore} from './lib/store.js';
+import {profileFor,installProfileRoutes} from './lib/profile.js';
 const derive=promisify(scrypt),id=()=>randomBytes(18).toString('hex'),hash=v=>createHash('sha256').update(v).digest('hex');
 const parseItem=i=>({...i,created:Number(i.created),body:JSON.parse(i.body)});
 export function createApp(options={}){
@@ -14,7 +15,7 @@ export function createApp(options={}){
  app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api'))res.setHeader('Cache-Control','private, no-store');
  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.get('origin')){let origin;try{origin=new URL(req.get('origin')).host}catch{return res.status(403).json({error:'Origem inválida.'})}if(origin!==req.get('host'))return res.status(403).json({error:'Origem inválida.'})}next();});
  async function userFor(cookie=''){const token=/(?:^|;\s*)session=([a-f0-9]{36})/.exec(cookie)?.[1];return token?db.one('SELECT users.* FROM users JOIN sessions ON sessions.user_id=users.id WHERE sessions.token=? AND sessions.expires>?',hash(token),Date.now()):null}
- async function safe(u){const now=Date.now();const partner=u.pair?await db.one('SELECT id,name,seen AS last_seen,COALESCE((SELECT MAX(seen) FROM sessions WHERE user_id=users.id AND expires>?),0) AS active_seen FROM users WHERE pair=? AND id<>?',now,u.pair,u.id):null;const mine=await db.one('SELECT MAX(seen) AS active_seen FROM sessions WHERE user_id=? AND expires>?',u.id,now);return{id:u.id,name:u.name,email:u.email,invite:u.invite,pair:u.pair,online:Number(mine?.active_seen)>now-20000,partner:partner?{id:partner.id,name:partner.name,online:Number(partner.active_seen)>now-20000,lastSeen:Number(partner.last_seen)}:null}}
+ async function safe(u){const now=Date.now();const partner=u.pair?await db.one('SELECT id,name,seen AS last_seen,COALESCE((SELECT MAX(seen) FROM sessions WHERE user_id=users.id AND expires>?),0) AS active_seen FROM users WHERE pair=? AND id<>?',now,u.pair,u.id):null;const mine=await db.one('SELECT MAX(seen) AS active_seen FROM sessions WHERE user_id=? AND expires>?',u.id,now);const profile=await profileFor(db,u.id),partnerProfile=partner?await profileFor(db,partner.id):null;return{...profile,id:u.id,name:u.name,email:u.email,invite:u.invite,pair:u.pair,online:Number(mine?.active_seen)>now-20000,partner:partner?{id:partner.id,name:partner.name,avatar:partnerProfile.avatar,online:Number(partner.active_seen)>now-20000,lastSeen:Number(partner.last_seen)}:null}}
  app.use('/api',async(req,res,next)=>{try{req.user=await userFor(req.headers.cookie);const token=/(?:^|;\s*)session=([a-f0-9]{36})/.exec(req.headers.cookie||'')?.[1];req.sessionHash=token?hash(token):null;next()}catch(e){next(e)}});
  const auth=(req,res,next)=>req.user?next():res.status(401).json({error:'Entre na sua conta para continuar.'});
  const paired=(req,res,next)=>req.user.pair?next():res.status(400).json({error:'Conecte seu amor pelo código de convite primeiro.'});
@@ -36,6 +37,7 @@ export function createApp(options={}){
   const token=id();await db.run('INSERT INTO sessions(token,user_id,expires,seen) VALUES(?,?,?,?)',hash(token),user.id,now+30*86400000,now);await db.run('UPDATE users SET seen=? WHERE id=?',now,user.id);
   res.setHeader('Set-Cookie',`session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${process.env.NODE_ENV==='production'?'; Secure':''}`);res.json(await safe({...user,seen:now}));
  });
+ installProfileRoutes(app,db,auth,safe);
  app.get('/api/me',auth,async(req,res)=>res.json(await safe(req.user)));
  app.post('/api/presence',auth,async(req,res)=>{const seen=req.body.visible===false?0:Date.now();await db.run('UPDATE sessions SET seen=? WHERE token=?',seen,req.sessionHash);if(seen)await db.run('UPDATE users SET seen=? WHERE id=?',seen,req.user.id);res.json({ok:true})});
  app.post('/api/logout',auth,async(req,res)=>{const token=/(?:^|;\s*)session=([a-f0-9]+)/.exec(req.headers.cookie)?.[1];await db.run('DELETE FROM sessions WHERE token=?',hash(token));res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':''));res.json({ok:true})});

@@ -1,0 +1,36 @@
+import {icon,mountIcons} from './icons.js';
+const $=s=>document.querySelector(s);
+export const themes=[{id:'midnight',name:'Meia-noite',note:'Preto & lavanda',colors:['#080A10','#202530','#B8A1FF']},{id:'rose',name:'Entre nós',note:'Azul & rosa',colors:['#0E1B48','#C18DB4','#87A7D0']},{id:'crimson',name:'Crimson Velvet',note:'Vinho & terracota',colors:['#5B1E1A','#A23A33','#A14237']},{id:'obsidian',name:'Obsidian Glow',note:'Preto & violeta',colors:['#050505','#3A0CA3','#A788FF']},{id:'petrol',name:'Maré serena',note:'Petróleo & névoa',colors:['#06141B','#253745','#CCD0CF']}];
+export const bubbleStyles=[['classic','Clássico'],['soft','Suave'],['love','Corações'],['cat','Gatinho'],['ghost','Fantasma']];
+let user,api,action,toast,onProfile,draft,wallpaper=null,editing=false;
+const defaults={theme:'midnight',bubble:'classic',wallpaperOpacity:35};
+function apply(preferences){const p={...defaults,...preferences};document.documentElement.dataset.theme=p.theme;document.documentElement.dataset.bubble=p.bubble;$('#messages').style.setProperty('--wallpaper-opacity',p.wallpaperOpacity/100);$('#messages').style.setProperty('--wallpaper-shade',(100-p.wallpaperOpacity)+'%');document.querySelector('meta[name="theme-color"]').content=themes.find(t=>t.id===p.theme)?.colors[0]||'#080A10';}
+export function avatar(element,person){if(!element)return;const value=person?.avatar||'',initial=person?.name?.[0]?.toUpperCase()||'♡';if(element.dataset.avatar===value&&element.dataset.initial===initial)return;element.dataset.avatar=value;element.dataset.initial=initial;element.replaceChildren();if(value){const img=new Image();img.src=value;img.alt=person.name||'Foto de perfil';img.onerror=()=>element.replaceChildren(document.createTextNode(initial));element.append(img)}else element.textContent=initial;}
+export function updatePersonalization(me){const changed=user?.id!==me.id;user=me;if(changed&&editing){editing=false;$('#appearance-dialog').close()}if(!editing||changed){apply(me.preferences);wallpaper=me.wallpaper;setWallpaper(wallpaper)}for(const id of ['my-initial','profile-button','account-avatar'])avatar($('#'+id),me);for(const id of ['partner-initial','chat-avatar','call-avatar'])avatar($('#'+id),me.partner);$('#profile-name').value=me.name;$('#remove-avatar').hidden=!me.avatar;$('#remove-wallpaper').hidden=!me.wallpaper;$('#call-dialog').style.setProperty('--caller-image',me.partner?.avatar?`url("${me.partner.avatar}")`:'none');}
+function setWallpaper(url){$('#messages').style.setProperty('--wallpaper-image',url?`url("${url}")`:'none');$('#messages').classList.toggle('has-wallpaper',!!url);$('#wallpaper-status').textContent=url?'Foto personalizada ativa':'Fundo liso';}
+function updateChoices(){document.querySelectorAll('[data-theme-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeChoice===draft.theme)));document.querySelectorAll('[data-bubble-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bubbleChoice===draft.bubble)));$('#wallpaper-intensity').value=draft.wallpaperOpacity;apply(draft);}
+function openAppearance(){if(!user)return;draft={...defaults,...user.preferences};editing=true;updateChoices();$('#appearance-dialog').showModal();}
+function closeAppearance(){editing=false;apply(user.preferences);$('#appearance-dialog').close();}
+async function imageFile(file,kind){
+ if(!file)throw Error('Escolha uma imagem.');if(file.size>25*1024*1024)throw Error('Escolha uma foto de até 25 MB.');
+ const url=URL.createObjectURL(file),img=new Image();
+ try{img.src=url;await img.decode();const canvas=document.createElement('canvas'),size=kind==='avatar'?512:1600;
+ if(kind==='avatar'){const side=Math.min(img.naturalWidth,img.naturalHeight);canvas.width=canvas.height=512;canvas.getContext('2d').drawImage(img,(img.naturalWidth-side)/2,(img.naturalHeight-side)/2,side,side,0,0,512,512)}else{const scale=Math.min(1,size/Math.max(img.naturalWidth,img.naturalHeight));canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height)}
+ const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.85));if(!blob||blob.size>3*1024*1024)throw Error('A foto ficou grande demais. Escolha outra imagem.');return blob;
+ }catch(error){throw Error(error.message?.includes('grande')?error.message:'Não foi possível abrir esta foto. Use JPEG, PNG ou WebP.')}finally{URL.revokeObjectURL(url)}
+}
+export function initPersonalization(options){({api,action,toast,onProfile}=options);mountIcons();
+ $('#theme-options').innerHTML=themes.map(t=>`<button type="button" data-theme-choice="${t.id}" aria-pressed="false"><span class="theme-swatches">${t.colors.map(c=>`<i style="background:${c}"></i>`).join('')}</span><b>${t.name}</b><small>${t.note}</small><span class="choice-check">${icon('check')}</span></button>`).join('');
+ $('#bubble-options').innerHTML=bubbleStyles.map(([id,name])=>`<button type="button" data-bubble-choice="${id}" aria-pressed="false"><span class="bubble-sample bubble-${id}">Oi, meu amor</span><b>${name}</b></button>`).join('');
+ $('[data-open-appearance]').onclick=openAppearance;$('#chat-appearance').onclick=openAppearance;$('#account-appearance').onclick=()=>{$('#account-dialog').close();openAppearance()};$('#close-appearance').onclick=closeAppearance;$('#appearance-dialog').addEventListener('cancel',e=>{e.preventDefault();closeAppearance()});
+ $('#theme-options').onclick=e=>{const b=e.target.closest('[data-theme-choice]');if(b){draft.theme=b.dataset.themeChoice;updateChoices()}};
+ $('#bubble-options').onclick=e=>{const b=e.target.closest('[data-bubble-choice]');if(b){draft.bubble=b.dataset.bubbleChoice;updateChoices()}};
+ $('#wallpaper-intensity').oninput=e=>{draft.wallpaperOpacity=Number(e.target.value);apply(draft)};
+ $('#save-appearance').onclick=e=>action(async()=>{const saved=await api('/preferences',{method:'PUT',body:draft});user.preferences=saved.preferences;editing=false;apply(user.preferences);$('#appearance-dialog').close();toast('Seu tema foi salvo. ♡');onProfile(user)},e.currentTarget);
+ $('#profile-form').onsubmit=e=>{e.preventDefault();action(async()=>{user=await api('/profile',{method:'PATCH',body:{name:$('#profile-name').value}});onProfile(user);toast('Perfil atualizado.');},e.submitter)};
+ for(const kind of ['avatar','wallpaper']){
+  $('#upload-'+kind).onclick=()=>$('#'+kind+'-file').click();
+  $('#'+kind+'-file').onchange=e=>action(async()=>{const file=e.target.files[0];if(!file)return;const button=$('#upload-'+kind);button.disabled=true;try{const photo=await imageFile(file,kind),form=new FormData();form.set('photo',photo,kind+'.jpg');const result=await api('/profile-media/'+kind,{method:'POST',body:form});Object.assign(user,{avatar:result.avatar,wallpaper:result.wallpaper});wallpaper=user.wallpaper;setWallpaper(wallpaper);onProfile(user);toast(kind==='avatar'?'Foto de perfil atualizada.':'Fundo da conversa atualizado.')}finally{button.disabled=false;e.target.value=''}});
+  $('#remove-'+kind).onclick=e=>action(async()=>{const result=await api('/profile-media/'+kind,{method:'DELETE'});Object.assign(user,{avatar:result.avatar,wallpaper:result.wallpaper});wallpaper=user.wallpaper;setWallpaper(wallpaper);onProfile(user);toast('Imagem removida.');},e.currentTarget);
+ }
+}

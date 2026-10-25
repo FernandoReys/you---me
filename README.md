@@ -81,3 +81,13 @@ O link do jogo foi corrigido para `memorias/jogo/index.html` e a referência ine
 A paleta do casal usa #0E1B48, #C18DB4, #E2CAD8, #87A7D0, #27425D e #0E1F2F. A galeria apresenta 34 momentos, agrupando seis variações semelhantes e preservando os 40 arquivos originais. As miniaturas exibem a foto inteira. Nossa História usa capítulos nativos em rolagem vertical, com carta, contador e surpresas, sem uma página incorporada dentro da tela.
 
 O jogo está em Nossa História → Nosso jogo, com opção de tela cheia. A física usa passos fixos de 60 Hz, colisão por cruzamento do topo das plataformas, salto de cerca de 209 pixels, tolerância curta na borda e memória do comando de pulo antes de aterrissar. As coordenadas da fase são estáveis ao redimensionar a tela.
+
+### Perfil e personalização
+
+O chat começa no tema escuro Meia-noite. Perfil → Temas & conversa (ou a paleta no cabeçalho) permite escolher Entre nós, Crimson Velvet, Obsidian Glow e Maré serena; os balões podem ser Clássico, Suave, Corações, Gatinho ou Fantasma. Cores, balões e intensidade do fundo são salvos em `user_settings` por conta. Fotos de perfil e fundos são comprimidos no navegador e guardados em `profile_media`: somente o titular e seu par podem acessar o avatar; somente o titular pode acessar o fundo. Não são arquivos públicos do repositório.
+
+Aplique `002_personalization.sql` antes de publicar esta versão (o comando `npm run db:migrate` aplica ambas as migrações). A mudança é aditiva e preserva contas, mensagens, fotos e pareamentos. Os testes cobrem isolamento, rejeição de formatos inválidos e persistência.
+
+A tela de chamadas tem foto do contato, fundo desfocado, vídeo imersivo, duração após conexão e controles de microfone, câmera e troca de lente. O transporte continua sendo WebRTC; a nova interface não substitui a necessidade de TURN em redes que exigem relay. O push com o app fechado continua pendente.
+
+Arte `public/assets/ghost-bubble.webp`: criada com image_gen a partir da referência de balão fantasma enviada, com fundo transparente, sem texto nem dados da captura. Prompt: “Isolate and reinterpret only the small white ghost message bubble as a friendly white ghost with oval eyes, curved tail, lavender edge shadow and transparent background; no screenshot, user content, people, logos or text.”
