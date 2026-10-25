@@ -1,0 +1,11 @@
+BEGIN;
+CREATE TABLE IF NOT EXISTS users(id text PRIMARY KEY,name text NOT NULL,email text UNIQUE NOT NULL,password text NOT NULL,invite text UNIQUE NOT NULL,pair text,seen bigint NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS sessions(token text PRIMARY KEY,user_id text NOT NULL REFERENCES users(id),expires bigint NOT NULL,seen bigint NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS items(id text PRIMARY KEY,pair text NOT NULL,kind text NOT NULL,author text NOT NULL REFERENCES users(id),body text NOT NULL,created bigint NOT NULL);
+CREATE TABLE IF NOT EXISTS photos(id text PRIMARY KEY,pair text NOT NULL,mime text NOT NULL,bytes bytea NOT NULL);
+CREATE TABLE IF NOT EXISTS signals(seq bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,pair text NOT NULL,sender text NOT NULL,recipient text NOT NULL,body text NOT NULL,created bigint NOT NULL);
+CREATE TABLE IF NOT EXISTS auth_attempts(key text PRIMARY KEY,n integer NOT NULL,expires bigint NOT NULL);
+CREATE INDEX IF NOT EXISTS items_pair_created ON items(pair,created);
+CREATE INDEX IF NOT EXISTS signals_recipient_seq ON signals(recipient,seq);
+CREATE INDEX IF NOT EXISTS users_pair ON users(pair);
+COMMIT;
