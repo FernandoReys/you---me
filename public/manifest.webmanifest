@@ -4,7 +4,7 @@
   "short_name": "You & Me",
   "description": "Seu bate-papo a dois, fotos e planos compartilhados.",
   "lang": "pt-BR",
-  "start_url": "/",
+  "start_url": "/?source=installed",
   "scope": "/",
   "display": "standalone",
   "background_color": "#080a10",
@@ -21,6 +21,34 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "categories": [
+    "social",
+    "lifestyle"
+  ],
+  "shortcuts": [
+    {
+      "name": "Conversar",
+      "short_name": "Conversas",
+      "url": "/#chat",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Nossas memórias",
+      "short_name": "Memórias",
+      "url": "/#gallery",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

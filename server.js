@@ -7,10 +7,12 @@ import multer from 'multer';
 import {fileURLToPath} from 'node:url';
 import {openStore} from './lib/store.js';
 import {profileFor,installProfileRoutes} from './lib/profile.js';
+import {createPush,pushConfigured} from './lib/push.js';
 const derive=promisify(scrypt),id=()=>randomBytes(18).toString('hex'),hash=v=>createHash('sha256').update(v).digest('hex');
 const parseItem=i=>({...i,created:Number(i.created),body:JSON.parse(i.body)});
 export function createApp(options={}){
  const db=options.store||openStore(options),app=express(),server=createServer(app);
+ const push=createPush(db,{send:options.pushSend});
  app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
  app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api'))res.setHeader('Cache-Control','private, no-store');
  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.get('origin')){let origin;try{origin=new URL(req.get('origin')).host}catch{return res.status(403).json({error:'Origem inválida.'})}if(origin!==req.get('host'))return res.status(403).json({error:'Origem inválida.'})}next();});
@@ -19,7 +21,7 @@ export function createApp(options={}){
  app.use('/api',async(req,res,next)=>{try{req.user=await userFor(req.headers.cookie);const token=/(?:^|;\s*)session=([a-f0-9]{36})/.exec(req.headers.cookie||'')?.[1];req.sessionHash=token?hash(token):null;next()}catch(e){next(e)}});
  const auth=(req,res,next)=>req.user?next():res.status(401).json({error:'Entre na sua conta para continuar.'});
  const paired=(req,res,next)=>req.user.pair?next():res.status(400).json({error:'Conecte seu amor pelo código de convite primeiro.'});
- app.get('/api/health',async(req,res)=>{await db.one('SELECT id FROM users LIMIT 1');res.json({ok:true,storage:db.postgres?'postgres':'sqlite-local'})});
+ app.get('/api/health',async(req,res)=>{await db.one('SELECT id FROM users LIMIT 1');res.json({ok:true,storage:db.postgres?'postgres':'sqlite-local',pushConfigured:pushConfigured()})});
  app.post('/api/auth/:action',async(req,res)=>{
   const {name,email,password}=req.body||{};if(typeof email!=='string'||typeof password!=='string'||email.length>254||password.length>256)return res.status(400).json({error:'Informe e-mail e senha válidos.'});
   const now=Date.now(),ip=String(req.headers['x-vercel-forwarded-for']||req.ip),key=hash(ip+':'+email.trim().toLowerCase());
@@ -37,10 +39,10 @@ export function createApp(options={}){
   const token=id();await db.run('INSERT INTO sessions(token,user_id,expires,seen) VALUES(?,?,?,?)',hash(token),user.id,now+30*86400000,now);await db.run('UPDATE users SET seen=? WHERE id=?',now,user.id);
   res.setHeader('Set-Cookie',`session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${process.env.NODE_ENV==='production'?'; Secure':''}`);res.json(await safe({...user,seen:now}));
  });
- installProfileRoutes(app,db,auth,safe);
+ installProfileRoutes(app,db,auth,safe);push.install(app,auth);
  app.get('/api/me',auth,async(req,res)=>res.json(await safe(req.user)));
  app.post('/api/presence',auth,async(req,res)=>{const seen=req.body.visible===false?0:Date.now();await db.run('UPDATE sessions SET seen=? WHERE token=?',seen,req.sessionHash);if(seen)await db.run('UPDATE users SET seen=? WHERE id=?',seen,req.user.id);res.json({ok:true})});
- app.post('/api/logout',auth,async(req,res)=>{const token=/(?:^|;\s*)session=([a-f0-9]+)/.exec(req.headers.cookie)?.[1];await db.run('DELETE FROM sessions WHERE token=?',hash(token));res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':''));res.json({ok:true})});
+ app.post('/api/logout',auth,async(req,res)=>{const token=/(?:^|;\s*)session=([a-f0-9]+)/.exec(req.headers.cookie)?.[1];await db.transaction(async tx=>{await tx.run('DELETE FROM push_subscriptions WHERE session_hash=?',hash(token));await tx.run('DELETE FROM sessions WHERE token=?',hash(token))});res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':''));res.json({ok:true})});
  app.post('/api/connect',auth,async(req,res)=>{
   const partner=await db.one('SELECT id FROM users WHERE invite=?',String(req.body.code||'').trim().toUpperCase());if(!partner||partner.id===req.user.id)return res.status(400).json({error:'Código inválido ou conta já conectada.'});
   const connected=await db.transaction(async tx=>{const rows=await tx.all('SELECT id,pair FROM users WHERE id IN (?,?) ORDER BY id'+(db.postgres?' FOR UPDATE':''),req.user.id,partner.id);if(rows.length!==2||rows.some(u=>u.pair))return false;await tx.run('UPDATE users SET pair=? WHERE id IN (?,?)',id(),req.user.id,partner.id);return true});
@@ -54,7 +56,7 @@ export function createApp(options={}){
   res.json({me,items,signals:signals.map(s=>({seq:Number(s.seq),...JSON.parse(s.body)})),cursor:signals.length?Number(signals.at(-1).seq):after});
  });
  async function add(req,kind,body){const item={id:id(),pair:req.user.pair,kind,author:req.user.id,body,created:Date.now()};await db.run('INSERT INTO items(id,pair,kind,author,body,created) VALUES(?,?,?,?,?,?)',item.id,item.pair,kind,item.author,JSON.stringify(body),item.created);return item}
- app.post('/api/items',auth,paired,async(req,res)=>{const {kind,body}=req.body;if(!['message','movie','goal'].includes(kind)||!body||typeof body.text!=='string'||!body.text.trim()||body.text.length>4000)return res.status(400).json({error:'Preencha o texto (até 4.000 caracteres).'});res.json(await add(req,kind,{text:body.text.trim(),done:false,type:body.type==='Série'?'Série':'Filme'}))});
+ app.post('/api/items',auth,paired,async(req,res)=>{const {kind,body}=req.body;if(!['message','movie','goal'].includes(kind)||!body||typeof body.text!=='string'||!body.text.trim()||body.text.length>4000)return res.status(400).json({error:'Preencha o texto (até 4.000 caracteres).'});const item=await add(req,kind,{text:body.text.trim(),done:false,type:body.type==='Série'?'Série':'Filme'});if(kind==='message')await push.notifyPartner(req.user,'message');res.json(item)});
  app.patch('/api/items/:id',auth,paired,async(req,res)=>{const item=await db.one('SELECT * FROM items WHERE id=? AND pair=?',req.params.id,req.user.pair);if(!item||!['movie','goal'].includes(item.kind))return res.sendStatus(404);await db.run('UPDATE items SET body=? WHERE id=?',JSON.stringify({...JSON.parse(item.body),done:!!req.body.done}),item.id);res.json({ok:true})});
  app.delete('/api/items/:id',auth,paired,async(req,res)=>{const item=await db.one('SELECT * FROM items WHERE id=? AND pair=?',req.params.id,req.user.pair);if(!item)return res.sendStatus(404);if(item.author!==req.user.id)return res.status(403).json({error:'Somente quem adicionou pode excluir.'});await db.transaction(async tx=>{if(item.kind==='photo')await tx.run('DELETE FROM photos WHERE id=? AND pair=?',JSON.parse(item.body).file,req.user.pair);await tx.run('DELETE FROM items WHERE id=?',item.id)});res.json({ok:true})});
  const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:3*1024*1024,files:1,fields:2}});
@@ -62,7 +64,7 @@ export function createApp(options={}){
   if(!req.file)return res.status(400).json({error:'Escolha uma foto.'});const b=req.file.buffer;
   const mime=b.subarray(0,3).equals(Buffer.from([255,216,255]))?'image/jpeg':b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'image/png':b.toString('ascii',0,4)==='RIFF'&&b.toString('ascii',8,12)==='WEBP'?'image/webp':null;
   if(!mime)return res.status(400).json({error:'Use JPEG, PNG ou WebP.'});const file=id();const item={id:id(),pair:req.user.pair,kind:'photo',author:req.user.id,body:{file,mime,text:String(req.body.text||'Nosso momento').slice(0,120)},created:Date.now()};
-  await db.transaction(async tx=>{await tx.run('INSERT INTO photos(id,pair,mime,bytes) VALUES(?,?,?,?)',file,item.pair,mime,b);await tx.run('INSERT INTO items(id,pair,kind,author,body,created) VALUES(?,?,?,?,?,?)',item.id,item.pair,item.kind,item.author,JSON.stringify(item.body),item.created)});res.json(item);
+  await db.transaction(async tx=>{await tx.run('INSERT INTO photos(id,pair,mime,bytes) VALUES(?,?,?,?)',file,item.pair,mime,b);await tx.run('INSERT INTO items(id,pair,kind,author,body,created) VALUES(?,?,?,?,?,?)',item.id,item.pair,item.kind,item.author,JSON.stringify(item.body),item.created)});await push.notifyPartner(req.user,'photo');res.json(item);
  });
  app.get('/api/photos/:file',auth,paired,async(req,res)=>{const photo=await db.one('SELECT mime,bytes FROM photos WHERE id=? AND pair=?',req.params.file,req.user.pair);if(!photo)return res.sendStatus(404);res.type(photo.mime).send(Buffer.from(photo.bytes))});
  app.get('/api/rtc',auth,(req,res)=>{
@@ -75,7 +77,7 @@ export function createApp(options={}){
   const data=req.body;if(!['offer','answer','candidate','end','busy'].includes(data?.type)||typeof data.callId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(data.callId)||JSON.stringify(data).length>65000)return res.status(400).json({error:'Sinal de chamada inválido.'});
   const partner=await db.one('SELECT id FROM users WHERE pair=? AND id<>?',req.user.pair,req.user.id);if(!partner)return res.status(409).json({error:'Conecte seu par.'});
   if(['offer','answer'].includes(data.type)&&(!data.sdp||typeof data.sdp.sdp!=='string'||data.sdp.type!==data.type))return res.status(400).json({error:'Descrição de chamada inválida.'});
-  await db.run('DELETE FROM signals WHERE created<?',Date.now()-180000);await db.run('INSERT INTO signals(pair,sender,recipient,body,created) VALUES(?,?,?,?,?)',req.user.pair,req.user.id,partner.id,JSON.stringify({from:req.user.name,data,at:Date.now()}),Date.now());res.json({ok:true});
+  await db.run('DELETE FROM signals WHERE created<?',Date.now()-180000);await db.run('INSERT INTO signals(pair,sender,recipient,body,created) VALUES(?,?,?,?,?)',req.user.pair,req.user.id,partner.id,JSON.stringify({from:req.user.name,data,at:Date.now()}),Date.now());if(data.type==='offer')await push.notifyPartner(req.user,'call');res.json({ok:true});
  });
  app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)),'public')));
  app.use((err,req,res,next)=>{console.error('Request failed:',err.code||err.name);res.status(err instanceof multer.MulterError?400:500).json({error:err instanceof multer.MulterError?'A foto deve ter até 3 MB.':'Não foi possível concluir. Tente novamente.'})});

@@ -60,7 +60,7 @@ O manifest e os ícones permitem adicionar à Tela de Início quando suportado p
 
 ## Alertas e autenticação
 
-O menu da conta oferece alertas opcionais do navegador enquanto o app está aberto. Não há serviço de push com o app fechado, chamada de fundo, recuperação de senha por e-mail ou verificação de e-mail nesta versão. O e-mail é um identificador de conta e não implica endereço verificado. As mensagens/fotos não têm criptografia de ponta a ponta no armazenamento.
+O menu da conta oferece Web Push por aparelho, incluindo app fechado e tela bloqueada nos sistemas compatíveis. Não há chamada VoIP nativa em segundo plano, recuperação de senha por e-mail ou verificação de e-mail nesta versão. O e-mail é um identificador de conta e não implica endereço verificado. As mensagens/fotos não têm criptografia de ponta a ponta no armazenamento.
 
 Senhas usam scrypt; tokens de sessão são armazenados como hash SHA-256 e enviados em cookies HttpOnly/SameSite=Strict/Secure na produção. Tentativas de login são limitadas no banco; cada rota autoriza a conta e o casal. Configure autenticação gerenciada e entrega de e-mail antes de ampliar o uso além do piloto do casal.
 
@@ -88,6 +88,20 @@ O chat começa no tema escuro Meia-noite. Perfil → Temas & conversa (ou a pale
 
 Aplique `002_personalization.sql` antes de publicar esta versão (o comando `npm run db:migrate` aplica ambas as migrações). A mudança é aditiva e preserva contas, mensagens, fotos e pareamentos. Os testes cobrem isolamento, rejeição de formatos inválidos e persistência.
 
-A tela de chamadas tem foto do contato, fundo desfocado, vídeo imersivo, duração após conexão e controles de microfone, câmera e troca de lente. O transporte continua sendo WebRTC; a nova interface não substitui a necessidade de TURN em redes que exigem relay. O push com o app fechado continua pendente.
+A tela de chamadas tem foto do contato, fundo desfocado, vídeo imersivo, duração após conexão e controles de microfone, câmera e troca de lente. O transporte continua sendo WebRTC; a nova interface não substitui a necessidade de TURN em redes que exigem relay. Ofertas de chamada geram um alerta para abrir o app; não há integração com CallKit nem atendimento com o app fechado.
 
 Arte `public/assets/ghost-bubble.webp`: criada com image_gen a partir da referência de balão fantasma enviada, com fundo transparente, sem texto nem dados da captura. Prompt: “Isolate and reinterpret only the small white ghost message bubble as a friendly white ghost with oval eyes, curved tail, lavender edge shadow and transparent background; no screenshot, user content, people, logos or text.”
+
+### App instalável e notificações em segundo plano
+
+A versão PWA é instalável no iPhone e no Android. Perfil → Instalar You & Me mostra as instruções e usa o convite de instalação do Chrome quando disponível. No iPhone/iPad, o Web Push requer iOS/iPadOS 16.4+, app adicionado à Tela de Início e permissão solicitada por toque do usuário. No Android, use Chrome atualizado e permita notificações. O modo Foco, configurações do sistema, bloqueio de notificações, ausência de internet e encerramento forçado do navegador podem impedir ou atrasar a entrega.
+
+Após instalar, entre na conta e use Perfil → Ativar notificações → Testar notificação. O botão de teste envia push pelo servidor para a inscrição atual; não é uma notificação local simulada. Para validar a tela bloqueada, bloqueie o aparelho receptor e envie uma mensagem pela conta pareada em outro aparelho. Não confundir inscrição aceita pelo provedor com confirmação de exibição física na tela. O teste automatizado usa um transporte substituto e verifica o envelope criptografado, direcionamento ao par, exclusão de endpoints 410 e revogação no logout.
+
+Configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` no servidor. A chave pública é distribuída ao cliente; a privada nunca é enviada ao navegador nem versionada. Gere as chaves uma única vez com `web-push.generateVAPIDKeys()` e mantenha o par estável. Aplique `003_web_push.sql` antes do deploy. O script de migração aplica 001, 002 e 003. `/api/health` informa `pushConfigured` sem revelar chaves.
+
+As inscrições ficam em `push_subscriptions`, ligadas à conta e à sessão daquele aparelho; sair da conta remove o vínculo, e sessões vencidas não recebem envios. Limite de dez inscrições por conta. O servidor valida os domínios dos serviços de push e o formato das chaves, envia payload criptografado (Web Push aes128gcm/VAPID), usa timeout e remove endpoints expirados (404/410). Mensagens/fotos geram alertas com texto genérico; o conteúdo privado não é exibido na tela bloqueada. Falhas no transporte não apagam a mensagem salva. O worker não mantém o chat aberto nem faz polling em segundo plano.
+
+Os temas são individuais: `user_settings.user_id` é a chave, o par não recebe preferências de aparência e cada login restaura somente suas escolhas. Testes verificam duas contas usando temas distintos e persistência ao entrar novamente.
+
+Esta entrega é uma PWA, sem APK/IPA e sem publicação nas lojas. Uma versão nativa para App Store/Google Play exige projetos nativos, assinatura, contas de desenvolvedor e push nativo APNs/FCM. Não embalar esta página em um WebView e presumir que o Web Push funcionará nele. A aplicação precisa de conexão para conversar e fazer chamadas; a página offline informa isso sem guardar dados privados em cache.

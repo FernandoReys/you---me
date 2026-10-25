@@ -1,6 +1,7 @@
 import {loadStory} from './story.js';
 import {initPersonalization,updatePersonalization} from './personalize.js';
 import {icon} from './icons.js';
+import {initPush,syncPushForUser,disconnectPush} from './push.js';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let me,items=[],poll,page='chat',register=false,filter='all',toastTimer,originalAlbumLoaded=false;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -19,14 +20,14 @@ window.addEventListener('pagehide',()=>{if(me)navigator.sendBeacon('/api/presenc
 function navigate(next){page=next;$$('[id^=page-]').forEach(s=>s.hidden=s.id!=='page-'+next);$$('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===next));if(next==='chat')scrollChat();if(next==='story')loadStory().catch(error=>toast(error.message));location.hash=next;}
 $$('[data-page]').forEach(b=>b.onclick=()=>navigate(b.dataset.page));$$('[data-go]').forEach(b=>b.onclick=()=>navigate(b.dataset.go));window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(['home','chat','gallery','movies','goals','story'].includes(p)&&p!==page)navigate(p);});
 $('#today').textContent=new Intl.DateTimeFormat('pt-BR',{day:'numeric',month:'long'}).format(new Date());
-$('#logout').onclick=()=>action(async()=>{await api('/logout',{method:'POST'});clearInterval(poll);cleanupCall();$('#account-dialog').close();me=null;items=[];lastSignalSeq=0;lastSnapshot='';messageIds=null;$('#app').hidden=true;$('#auth').hidden=false;});
+$('#logout').onclick=()=>action(async()=>{await disconnectPush();await api('/logout',{method:'POST'});clearInterval(poll);cleanupCall();$('#account-dialog').close();me=null;items=[];lastSignalSeq=0;lastSnapshot='';messageIds=null;$('#app').hidden=true;$('#auth').hidden=false;});
 $('#profile-button').onclick=()=>{$('#account-name').textContent='Conectado como '+me.name;$('#account-partner').textContent=me.partner?'Seu par: '+me.partner.name+(me.partner.online?' · online':' · offline'):'Conecte seu par pelo código de convite.';$('#account-code').textContent=me.invite;$('#account-dialog').showModal()};
 $('#close-account').onclick=()=>$('#account-dialog').close();
 $('#chat-photo').onclick=()=>{navigate('gallery');$('#photo-form').hidden=false};
 $('#connect-form').onsubmit=e=>{e.preventDefault();action(async()=>{await api('/connect',{method:'POST',body:{code:new FormData(e.target).get('code')}});await refresh();toast('Agora vocês têm um cantinho só de vocês! ♡');},e.submitter);};
 const empty=(icon,title,text)=>`<div class="empty"><span class="empty-icon">${icon}</span>${title}<p>${text}</p></div>`;
 function render(){
- updatePersonalization(me);$('#couple-names').textContent=me.partner?`${me.name} & ${me.partner.name}`:me.name+' & seu amor';$('#chat-name').textContent=me.partner?.name||'Seu amor';$('#connect-banner').hidden=!!me.pair;$('#invite-code').textContent=me.invite;
+ updatePersonalization(me);syncPushForUser(me.id);$('#couple-names').textContent=me.partner?`${me.name} & ${me.partner.name}`:me.name+' & seu amor';$('#chat-name').textContent=me.partner?.name||'Seu amor';$('#connect-banner').hidden=!!me.pair;$('#invite-code').textContent=me.invite;
  const photos=items.filter(i=>i.kind==='photo'),movies=items.filter(i=>i.kind==='movie'),goals=items.filter(i=>i.kind==='goal');
  $('#photo-count').textContent=photos.length;$('#movie-count').textContent=movies.filter(i=>!i.body.done).length;$('#goal-count').textContent=goals.filter(i=>!i.body.done).length;
  $('#home-photos').innerHTML=photos.length?photos.slice(-3).reverse().map(i=>`<img src="/api/photos/${esc(i.body.file)}" alt="${esc(i.body.text)}">`).join(''):'<div class="empty-memories"><span>▧</span><p>A nossa próxima lembrança começa aqui.<br>Que tal guardar a primeira foto?</p></div>';
@@ -87,14 +88,11 @@ $('#mute-call').onclick=()=>{const track=stream?.getAudioTracks()[0];if(!track)r
 $('#camera-call').onclick=()=>{const track=stream?.getVideoTracks()[0];if(!track)return;track.enabled=!track.enabled;$('#camera-call').setAttribute('aria-pressed',String(!track.enabled));$('#camera-call').setAttribute('aria-label',track.enabled?'Desligar câmera':'Ligar câmera');$('#camera-call small').textContent=track.enabled?'Câmera':'Ativar'};
 $('#flip-call').onclick=()=>action(async()=>{if(!stream||!videoCall||!peer)return;const activeId=callId,next=facingMode==='user'?'environment':'user';const replacement=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:next}},audio:false});const track=replacement.getVideoTracks()[0];if(!callActive||activeId!==callId){replacement.getTracks().forEach(t=>t.stop());return}const sender=peer.getSenders().find(s=>s.track?.kind==='video');if(!sender){track.stop();return}try{track.enabled=stream.getVideoTracks()[0]?.enabled!==false;await sender.replaceTrack(track);stream.getVideoTracks().forEach(old=>{stream.removeTrack(old);old.stop()});stream.addTrack(track);$('#local-video').srcObject=stream;facingMode=next;$('#local-video').style.transform=next==='user'?'scaleX(-1)':'none'}catch(e){track.stop();throw e}},$('#flip-call'));
 $('#play-call').onclick=()=>{const media=videoCall?$('#remote-video'):$('#remote-audio');media.play().then(()=>$('#play-call').hidden=true).catch(()=>toast('Verifique o volume e a permissão de áudio.'))};
-let notificationEnabled=false,workerRegistration=null;
-try{notificationEnabled=localStorage.getItem('youme-notifications')==='yes'}catch{}
-if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('/sw.js').then(r=>workerRegistration=r).catch(()=>{});
 navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='open-chat')navigate('chat')});
-function notifyMessage(count){document.title='('+count+') You & Me · Nova mensagem';if(!document.hidden)toast('Seu amor enviou uma nova mensagem 💜');if(document.hidden&&notificationEnabled&&'Notification' in window&&Notification.permission==='granted')workerRegistration?.showNotification('You & Me',{body:'Seu par enviou uma mensagem. Abra o app para ver.',icon:'/icon-192.png',tag:'youme-message'}).catch(()=>{})}
-$('#enable-alerts').onclick=()=>action(async()=>{if(!('Notification' in window)||!window.isSecureContext)return toast('Este navegador não oferece alertas. No iPhone, abra pela Tela de Início.');if(notificationEnabled){notificationEnabled=false;localStorage.setItem('youme-notifications','no');toast('Alertas desativados neste aparelho.');return}const permission=await Notification.requestPermission();if(permission==='granted'){notificationEnabled=true;localStorage.setItem('youme-notifications','yes');toast('Alertas ativados com o app aberto. Push com o app fechado ainda está pendente.')}else toast('Permissão não concedida. Ajuste nas configurações do navegador.')},$('#enable-alerts'));
+function notifyMessage(count){document.title='('+count+') You & Me · Nova mensagem';if(!document.hidden)toast('Seu amor enviou uma nova mensagem ♡')}
 function updateViewport(){document.documentElement.style.setProperty('--app-height',(window.visualViewport?.height||innerHeight)+'px');document.documentElement.classList.toggle('keyboard-open',!!document.activeElement?.matches('input')&&innerHeight-(window.visualViewport?.height||innerHeight)>120)}
 window.visualViewport?.addEventListener('resize',updateViewport);window.addEventListener('resize',updateViewport);document.addEventListener('focusin',updateViewport);document.addEventListener('focusout',updateViewport);updateViewport();
+initPush({api,action,toast});
 initPersonalization({api,action,toast,onProfile:profile=>{me=profile;lastSnapshot='';render();renderPresence();}});
 try{me=await api('/me');await enter()}catch{$('#auth').hidden=false;$('#app').hidden=true}
 
