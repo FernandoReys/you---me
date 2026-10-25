@@ -111,3 +111,7 @@ Esta entrega é uma PWA, sem APK/IPA e sem publicação nas lojas. Uma versão n
 `public/viewport.js` acompanha resize e scroll de VisualViewport, altura antes do teclado e offset da tela. O chat no celular ocupa a área visível, usa uma única lista flexível com rolagem e mantém o campo de envio no limite inferior. O fechamento do teclado ignora offsets obsoletos; zoom manual e teclado físico não são tratados como teclado virtual. Testes cobrem Safari, resize do Android, fechamento e zoom; uma simulação a 390×420 verificou o campo em y=420 sem espaço vazio nem rolagem horizontal. A validação final em iPhone real continua necessária.
 
 Novas mensagens com o app visível exibem um banner com nome, foto e prévia. No sistema, nome e prévia aparecem conforme as preferências de notificações/privacidade do aparelho. iOS PWA não oferece a mesma interface de chamada de CallKit; o alerta de ligação abre o app para atender.
+
+### Projeto nativo em desenvolvimento
+
+`mobile/` contém projetos React Native para Android/iOS, CallKeep/CallKit, PushKit, Firebase Messaging, mídia WebRTC nativa e sessão em armazenamento seguro. Esta alteração deve permanecer na branch de desenvolvimento até cumprir os critérios de `mobile/README.md`. Não significa que chamadas na tela bloqueada já foram ativadas para quem usa a PWA. As flags nativas estão desabilitadas; nenhuma credencial foi provisionada e nenhum APK/IPA foi gerado. A migração 004 precisa ser testada e aplicada antes de integrar estes endpoints no ambiente em produção.

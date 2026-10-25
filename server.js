@@ -8,11 +8,12 @@ import {fileURLToPath} from 'node:url';
 import {openStore} from './lib/store.js';
 import {profileFor,installProfileRoutes} from './lib/profile.js';
 import {createPush,pushConfigured} from './lib/push.js';
+import {nativeCalls} from './mobile/server/nativeRoutes.mjs';
 const derive=promisify(scrypt),id=()=>randomBytes(18).toString('hex'),hash=v=>createHash('sha256').update(v).digest('hex');
 const parseItem=i=>({...i,created:Number(i.created),body:JSON.parse(i.body)});
 export function createApp(options={}){
  const db=options.store||openStore(options),app=express(),server=createServer(app);
- const push=createPush(db,{send:options.pushSend});
+ const push=createPush(db,{send:options.pushSend}),native=nativeCalls(db,{send:options.nativeSend});
  app.disable('x-powered-by');app.use(express.json({limit:'100kb'}));
  app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('Permissions-Policy','camera=(self), microphone=(self), geolocation=()');if(req.path.startsWith('/api'))res.setHeader('Cache-Control','private, no-store');
  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.get('origin')){let origin;try{origin=new URL(req.get('origin')).host}catch{return res.status(403).json({error:'Origem inválida.'})}if(origin!==req.get('host'))return res.status(403).json({error:'Origem inválida.'})}next();});
@@ -39,10 +40,10 @@ export function createApp(options={}){
   const token=id();await db.run('INSERT INTO sessions(token,user_id,expires,seen) VALUES(?,?,?,?)',hash(token),user.id,now+30*86400000,now);await db.run('UPDATE users SET seen=? WHERE id=?',now,user.id);
   res.setHeader('Set-Cookie',`session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${process.env.NODE_ENV==='production'?'; Secure':''}`);res.json(await safe({...user,seen:now}));
  });
- installProfileRoutes(app,db,auth,safe);push.install(app,auth);
+ installProfileRoutes(app,db,auth,safe);push.install(app,auth);native.install(app,auth);
  app.get('/api/me',auth,async(req,res)=>res.json(await safe(req.user)));
  app.post('/api/presence',auth,async(req,res)=>{const seen=req.body.visible===false?0:Date.now();await db.run('UPDATE sessions SET seen=? WHERE token=?',seen,req.sessionHash);if(seen)await db.run('UPDATE users SET seen=? WHERE id=?',seen,req.user.id);res.json({ok:true})});
- app.post('/api/logout',auth,async(req,res)=>{const token=/(?:^|;\s*)session=([a-f0-9]+)/.exec(req.headers.cookie)?.[1];await db.transaction(async tx=>{await tx.run('DELETE FROM push_subscriptions WHERE session_hash=?',hash(token));await tx.run('DELETE FROM sessions WHERE token=?',hash(token))});res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':''));res.json({ok:true})});
+ app.post('/api/logout',auth,async(req,res)=>{const token=/(?:^|;\s*)session=([a-f0-9]+)/.exec(req.headers.cookie)?.[1];await db.transaction(async tx=>{await tx.run('DELETE FROM push_subscriptions WHERE session_hash=?',hash(token));await tx.run('DELETE FROM native_devices WHERE session_hash=?',hash(token));await tx.run('DELETE FROM sessions WHERE token=?',hash(token))});res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':''));res.json({ok:true})});
  app.post('/api/connect',auth,async(req,res)=>{
   const partner=await db.one('SELECT id FROM users WHERE invite=?',String(req.body.code||'').trim().toUpperCase());if(!partner||partner.id===req.user.id)return res.status(400).json({error:'Código inválido ou conta já conectada.'});
   const connected=await db.transaction(async tx=>{const rows=await tx.all('SELECT id,pair FROM users WHERE id IN (?,?) ORDER BY id'+(db.postgres?' FOR UPDATE':''),req.user.id,partner.id);if(rows.length!==2||rows.some(u=>u.pair))return false;await tx.run('UPDATE users SET pair=? WHERE id IN (?,?)',id(),req.user.id,partner.id);return true});
@@ -77,7 +78,7 @@ export function createApp(options={}){
   const data=req.body;if(!['offer','answer','candidate','end','busy'].includes(data?.type)||typeof data.callId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(data.callId)||JSON.stringify(data).length>65000)return res.status(400).json({error:'Sinal de chamada inválido.'});
   const partner=await db.one('SELECT id FROM users WHERE pair=? AND id<>?',req.user.pair,req.user.id);if(!partner)return res.status(409).json({error:'Conecte seu par.'});
   if(['offer','answer'].includes(data.type)&&(!data.sdp||typeof data.sdp.sdp!=='string'||data.sdp.type!==data.type))return res.status(400).json({error:'Descrição de chamada inválida.'});
-  await db.run('DELETE FROM signals WHERE created<?',Date.now()-180000);await db.run('INSERT INTO signals(pair,sender,recipient,body,created) VALUES(?,?,?,?,?)',req.user.pair,req.user.id,partner.id,JSON.stringify({from:req.user.name,data,at:Date.now()}),Date.now());if(data.type==='offer')await push.notifyPartner(req.user,'call',{video:!!data.video});res.json({ok:true});
+  await db.run('DELETE FROM signals WHERE created<?',Date.now()-180000);await db.run('INSERT INTO signals(pair,sender,recipient,body,created) VALUES(?,?,?,?,?)',req.user.pair,req.user.id,partner.id,JSON.stringify({from:req.user.name,data,at:Date.now()}),Date.now());if(data.type==='offer'){await push.notifyPartner(req.user,'call',{video:!!data.video});await native.notify(req.user,data)}res.json({ok:true});
  });
  app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)),'public')));
  app.use((err,req,res,next)=>{console.error('Request failed:',err.code||err.name);res.status(err instanceof multer.MulterError?400:500).json({error:err instanceof multer.MulterError?'A foto deve ter até 3 MB.':'Não foi possível concluir. Tente novamente.'})});
